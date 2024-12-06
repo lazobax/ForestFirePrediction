@@ -1,0 +1,332 @@
+---
+title: "Project"
+author: "Lazo Ali & Lia Shahine"
+date: "2024-12-06"
+output: html_document
+---
+
+```{r include=FALSE}
+set.seed(6122024)
+```
+
+# Introduction
+
+# Exploratory Data Analysis
+
+The CSV file provided for this project contained two distinct sections. One for Cordillera and another for Hudson Bay. The data were unified in excel and a column was added indicating the city for each row.Let's start exploring the data!
+
+First we load the data and ensure its loaded properly:
+
+```{r}
+rawData <- read.csv("ff_data.csv")
+head(rawData)
+```
+
+The data appears to be loaded properly, let's see what our data looks like.
+
+the columns are:
+
+```{r}
+colnames(rawData)
+```
+
+the dimensions of our data set:
+
+```{r}
+dim(rawData)
+```
+
+We have 15 columns and 244 observations.
+
+Now let's look at the data types:
+
+```{r}
+str(rawData)
+```
+
+It appears as though `DC` and `FWI`, which should be of type `num`, are interpreted as type `chr`, let's explore why this is by returning the rows with non-numeric `FWI` variable:
+
+```{r echo=FALSE}
+non_numeric_rows <- rawData[!grepl("^\\d*\\.?\\d+$", rawData$FWI), ]
+non_numeric_rows
+```
+
+If we observe the `DC` variable for this row, it indicates that there must have been a (un/mis)placed comma in the original `forest_fires_dataset.csv`. Upon manual inspection, this does seem to be true.
+
+```{bash}
+grep "14,7,2012" forest_fires_dataset.csv
+```
+
+The first observation is that of Cordillera and the second that of Hudson Bay. As we see, the data is not formatted properly. We can assume that the correct formatting of this row should be:
+
+```         
+14,7,2012,37,37,18,0.2,88.9,12.9,14.6,9,12.5,10.4,fire,Hudson Bay
+```
+
+However, this assumption could negatively impact downstream analysis if not dealt with correctly. We can't simply assume that the value `9` should be put in the ISI section without further analysis of this assumption. For now, we will remove this row from the dataset:
+
+```{r}
+rawData <- rawData[setdiff(rownames(rawData), rownames(non_numeric_rows)), ]
+correctedRow <- c(14,7,2012,37,37,18,0.2,88.9,12.9,14.6,9,12.5,10.4,"fire","Hudson Bay")
+```
+
+We will now convert the columns to numeric:
+
+```{r}
+columnsToConvert <- c("DC","FWI")
+rawData[columnsToConvert] <- lapply(rawData[columnsToConvert], as.numeric)
+```
+
+Let's check the data types again:
+
+```{r}
+str(rawData[columnsToConvert])
+```
+
+It's correct!
+
+let's see if the classes and cities are imported with issues:
+
+```{r}
+unique(rawData$Class)
+```
+
+indeed, let's fix this
+
+```{r}
+# Replace rows where 'Class' contains "fire" but does not contain "not" with "F"
+rawData$Class[grep("fire", rawData$Class) & !grepl("not", rawData$Class)] <- "F"
+
+# Use grep to find rows where Class contains "not" and change to "NF"
+rawData$Class[grep("not", rawData$Class)] <- "NF"
+```
+
+now let's check the same with the City variable
+
+```{r}
+unique(rawData$City)
+```
+
+all good!
+
+now, let's check for missing values:
+
+```{r}
+colSums(is.na(rawData))
+```
+
+There are none!
+
+now let's define a function to plot a box and whisker plot and descriptive statistics given a dataframe and a column name:
+
+```{r}
+plot_with_stats <- function(column_name, dataframe) {
+  # Extract the column
+  column_data <- dataframe[[column_name]]
+  
+  # Calculate descriptive statistics
+  stats <- list(
+    Min = min(column_data, na.rm = TRUE),
+    Q1 = quantile(column_data, 0.25, na.rm = TRUE),
+    Median = median(column_data, na.rm = TRUE),
+    Q3 = quantile(column_data, 0.75, na.rm = TRUE),
+    Max = max(column_data, na.rm = TRUE),
+    Mean = mean(column_data, na.rm = TRUE),
+    SD = sd(column_data, na.rm = TRUE)
+  )
+  
+  # Adjust plot size to accommodate text
+  par(mar = c(5, 4, 4, 10))  # Increase right margin for text
+  
+  # Create the boxplot
+  boxplot(column_data, 
+          main = paste("Boxplot of", column_name), 
+          col = "skyblue",
+          xlab = column_name)
+  
+  # Prepare the text for annotation
+  stats_text <- paste(
+    "Min:", round(stats$Min, 2), "\n",
+    "Q1:", round(stats$Q1, 2), "\n",
+    "Median:", round(stats$Median, 2), "\n",
+    "Q3:", round(stats$Q3, 2), "\n",
+    "Max:", round(stats$Max, 2), "\n",
+    "Mean:", round(stats$Mean, 2), "\n",
+    "SD:", round(stats$SD, 2)
+  )
+  
+  # Add the text outside the plot area
+  mtext(stats_text, side = 4, line = 5, adj = 0, cex = 0.8, las = 1)}
+
+
+```
+
+Let's get all our numerical columns in one vector:
+
+```{r}
+numerical_columns <- names(rawData)[sapply(rawData, is.numeric)]
+for (column in numerical_columns[!numerical_columns %in% c("Day", "Month", "Year")]) {
+  plot_with_stats(column, rawData)
+}
+
+```
+
+```{r}
+library(ggplot2)
+
+# Create a copy of rawData for plotting without modifying rawData
+rawDataForPlot <- rawData
+
+# Select numerical columns from rawDataForPlot
+numerical_columns <- names(rawDataForPlot)[sapply(rawDataForPlot, is.numeric)]
+numerical_columns <- numerical_columns[!numerical_columns %in% c("Day", "Month", "Year")]
+
+numerical_data <- rawDataForPlot[, numerical_columns]
+
+# Define colors and shapes for the existing categories in rawDataForPlot
+colors <- c("F" = "#d95f02", "NF" = "#1b9e77")
+shapes <- c("Hudson Bay" = 21, "Cordillera" = 24)
+
+# Loop through each pair of numerical columns and create scatter plots
+for (i in 1:(length(numerical_columns) - 1)) {
+  for (j in (i + 1):length(numerical_columns)) {
+    
+    x_var <- numerical_columns[i]
+    y_var <- numerical_columns[j]
+    
+    plot <- ggplot(rawDataForPlot, aes_string(x = x_var, y = y_var)) +
+      geom_point(aes(fill = Class, shape = City), size = 3, stroke = 1) +  # Map fill and shape
+      scale_fill_manual(values =  c("F" = "#d95f02", "NF" = "#1b9e77"), name = "Class", ) +  # Apply colors to Class
+      scale_shape_manual(values = shapes, name = "City") +  # Apply shapes to City
+      labs(
+        title = paste("Scatterplot of", x_var, "vs", y_var),
+        x = x_var,
+        y = y_var
+      ) +
+      theme_minimal() +
+      theme(
+        legend.position = "top",
+        legend.direction = "horizontal",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(face = "bold", hjust = 0.5)
+      )
+    
+    print(plot)
+  }
+}
+
+
+```
+
+That shit above didn't work we will come back to it later, for now we continue
+
+Class imbalance:
+
+```{r}
+
+library(ggplot2)
+
+# Create a new data frame for plotting without modifying rawData
+rawDataForPlot <- rawData
+
+# Ensure Class is a factor with proper levels in the new data frame
+rawDataForPlot$Class <- factor(rawDataForPlot$Class, levels = c("F", "NF"))
+
+# Create a new data frame for the counts of each class
+class_counts <- as.data.frame(table(rawDataForPlot$Class))
+colnames(class_counts) <- c("Class", "Count")
+
+# Create a bar plot of the Class variable with specified colors and count labels
+ggplot(rawDataForPlot, aes(x = Class)) +
+  geom_bar(aes(fill = Class), color = "black") +  # Fill bars based on Class
+  scale_fill_manual(values = c("F" = "#d95f02", "NF" = "#1b9e77")) +  # Custom colors for F and NF
+  labs(
+    title = "Distribution of Classes",
+    x = "Class",
+    y = "Count"
+  ) +
+  geom_text(data = class_counts, aes(x = Class, y = Count, label = Count), vjust = -0.5) +  # Add count labels above bars
+  theme_minimal() +
+  theme(
+    legend.position = "none",  # Remove the legend (optional)
+    plot.title = element_text(face = "bold", hjust = 0.5)  # Center and bold title
+  )
+
+
+```
+Classes don't look imbalanced 
+
+
+
+# Data Pre-Processing
+we will do a generic pre-processing here, all but normalizing the numeric values, this is because different ML models will benefit from different normalization methods:
+
+```{r}
+# Create a new data frame for preprocessing to avoid modifying rawData
+rawDataForML <- rawData
+
+# Step 1: Drop the 'Year' column
+rawDataForML$Year <- NULL
+
+# Step 2: Encode 'Class' and 'City'
+# Encode 'Class' as -1 for 'F' and 1 for 'NF'
+rawDataForML$Class <- ifelse(rawDataForML$Class == "F", -1, 1)
+
+# Encode 'City' as -1 for 'Cordillera' and 1 for 'Hudson Bay'
+rawDataForML$City <- ifelse(rawDataForML$City == "Cordillera", -1, 1)
+
+# Show the first few rows of the preprocessed data
+head(rawDataForML)
+
+```
+
+
+
+we will use the distributions to guide the normalization process for each model 
+```{r}
+library(ggplot2)
+
+# Select numeric columns
+numerical_columns <- names(rawDataForML)[sapply(rawDataForML, is.numeric)]
+
+# Loop through each numeric variable and plot the distribution
+for (col in numerical_columns) {
+  # Create a histogram for each numeric column
+  plot <- ggplot(rawDataForML, aes_string(x = col)) +
+    geom_histogram(bins = 30, fill = "#d95f02", color = "black", alpha = 0.7) +
+    labs(
+      title = paste("Distribution of", col),
+      x = col,
+      y = "Frequency"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5)
+    )
+  
+  # Print the plot
+  print(plot)
+}
+
+```
+
+# Model Development
+
+## Logistic Regression
+
+## Linear Discriminant Analysis
+
+## Quadratic Discriminant Analysis
+
+## K-Nearest Neighbors Classifier
+
+## Tree Based Methods
+
+## Support Vector Machine
+
+## Analysis
+
+# Results and Interpretation
+
+# Conclusion
