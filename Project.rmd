@@ -315,6 +315,53 @@ for (col in numerical_columns) {
 
 ## Logistic Regression
 
+
+
+In this section, we will build a **Logistic Regression** model to predict whether a fire will occur based on environmental factors. The outcome we are predicting is categorical, either **"fire"** or **"no fire"**. 
+
+### Why Logistic Regression?
+
+Logistic regression is used for classification tasks, making it suitable for predicting categorical outcomes like "fire" or "no fire". Since the goal is to classify whether a fire is likely to occur, logistic regression is an appropriate choice. 
+
+### Model Evaluation
+
+We will assess the performance of our model using the **ROC curve** (Receiver Operating Characteristic curve) and the **AUC** (Area Under Curve). The ROC curve compares the true positive rate (sensitivity) with the false positive rate (1-specificity). A **higher ROC curve** indicates better performance, and a **higher AUC (closer to 1)** indicates a better model fit.
+
+### Steps for Building the Model
+
+We will first build the logistic regression model without normalizing the data and then compare the results after applying **Z-score normalization**. Normalization is essential in logistic regression because it standardizes features that have different units or scales. Without normalization, features with larger ranges can dominate the model and impact its accuracy.
+
+### 1. Build Model Without Normalization
+
+```r
+# Split the data into training and testing sets (80% train, 20% test)
+set.seed(123)
+trainIndex <- createDataPartition(rawData$Classes, p = 0.8, list = FALSE)
+trainData <- rawData[trainIndex, ]
+testData <- rawData[-trainIndex, ]
+
+# Fit the Logistic Regression model
+logit_model <- glm(Classes ~ Temp + RH + Ws + Rain + FFMC + DMC + DC + ISI + BUI + FWI, 
+                   data = trainData, 
+                   family = binomial)
+
+# Summary of the model
+summary(logit_model)
+
+# Predict on the test data
+predictions <- predict(logit_model, testData, type = "response")
+predicted_classes <- ifelse(predictions > 0.5, "fire", "not fire")
+
+# Confusion Matrix
+conf_matrix <- confusionMatrix(factor(predicted_classes), testData$Classes)
+print(conf_matrix)
+
+# Calculate ROC curve and AUC
+roc_curve <- roc(testData$Classes, predictions)
+plot(roc_curve, main = "ROC Curve - Logistic Regression")
+auc(roc_curve)
+
+
 ## Linear Discriminant Analysis
 
 ## Quadratic Discriminant Analysis
@@ -324,6 +371,80 @@ for (col in numerical_columns) {
 ## Tree Based Methods
 
 ## Support Vector Machine
+
+# ## Support Vector Machine (SVM) Model
+
+In this section, we will build a Support Vector Machine (SVM) model to predict if a fire will occur 
+ based on environmental factors (independent variables). SVM works by finding the hyperplane that best  separates the classes in the feature space. We will first train the SVM model using the raw data (without normalization) 
+and evaluate it using the confusion matrix, ROC curve, and AUC. Afterward, we will normalize the data using Z-score normalization 
+to see if it improves the model’s performance.
+
+# ### SVM without Normalization
+
+## Loading necessary libraries
+if(!require(e1071)) install.packages("e1071", dependencies=TRUE)  # Install the e1071 package if not already installed
+library(e1071)  # Load the e1071 package, which includes functions for SVM
+
+## Split the data into training (80%) and testing (20%) sets
+set.seed(123)  # Set seed for reproducibility
+trainIndex <- createDataPartition(rawData$Classes, p = 0.8, list = FALSE)  # 80% training data
+trainData <- rawData[trainIndex, ]  # Extract training dataset
+testData <- rawData[-trainIndex, ]  # Extract testing dataset
+
+## Train the SVM model using the 'Classes' as the dependent variable
+svm_model <- svm(Classes ~ Temp + RH + Ws + Rain + FFMC + DMC + DC + ISI + BUI + FWI,
+                 data = trainData,  # Use training data
+                 kernel = "linear",  # Use linear kernel
+                 type = "C-classification")  # Classification problem
+
+## Make predictions using the test data
+svm_predictions <- predict(svm_model, newdata = testData)
+
+## Evaluate the performance using a confusion matrix
+confusionMatrix(svm_predictions, testData$Classes)
+
+## Generate the ROC curve and calculate the AUC (Area Under the Curve)
+svm_roc <- roc(testData$Classes, as.numeric(svm_predictions), levels=rev(levels(testData$Classes)))
+plot(svm_roc, main = "ROC Curve for SVM", col = "blue", lwd = 2)
+auc(svm_roc)  # Display the AUC score
+
+# The SVM model without normalization is now trained and evaluated.
+
+# ### SVM with Normalization (Z-score)
+
+# Normalization is important for models like SVM as it ensures all features are on the same scale.
+# We'll use Z-score normalization to standardize the data before training the SVM model.
+
+## Apply Z-score normalization to the numerical columns
+numerical_columns <- c("Temp", "RH", "Ws", "Rain", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI")
+
+# Normalize the numerical columns using Z-score
+rawData_normalized <- rawData
+rawData_normalized[numerical_columns] <- scale(rawData[numerical_columns])
+
+## Split the normalized data into training and testing sets
+trainData_normalized <- rawData_normalized[trainIndex, ]
+testData_normalized <- rawData_normalized[-trainIndex, ]
+
+## Train the SVM model using normalized data
+svm_model_normalized <- svm(Classes ~ Temp + RH + Ws + Rain + FFMC + DMC + DC + ISI + BUI + FWI,
+                            data = trainData_normalized,  # Use normalized training data
+                            kernel = "linear",  # Use linear kernel
+                            type = "C-classification")  # Classification problem
+
+## Make predictions using the normalized test data
+svm_predictions_normalized <- predict(svm_model_normalized, newdata = testData_normalized)
+
+## Evaluate the performance using a confusion matrix for normalized data
+confusionMatrix(svm_predictions_normalized, testData_normalized$Classes)
+
+## Generate the ROC curve and calculate the AUC (Area Under the Curve) for normalized data
+svm_roc_normalized <- roc(testData_normalized$Classes, as.numeric(svm_predictions_normalized), levels=rev(levels(testData_normalized$Classes)))
+plot(svm_roc_normalized, main = "ROC Curve for Normalized SVM", col = "red", lwd = 2)
+auc(svm_roc_normalized)  # Display the AUC score
+
+# The SVM model with normalization is now trained and evaluated.
+
 
 ## Analysis
 
