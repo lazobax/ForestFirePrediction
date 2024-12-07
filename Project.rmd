@@ -313,6 +313,66 @@ for (col in numerical_columns) {
 
 # Model Development
 
+#Linear Regression 
+
+
+In this section, we will build the **Linear Regression** model to assess how accurately it can perform on unseen data. The model's performance will be evaluated using the **Mean Squared Error (MSE)**, which quantifies the difference between the predicted and actual values of the **Fire Weather Index (FWI)**.
+
+Since linear regression is designed to predict continuous data, we will use numerical data for the analysis. Specifically, we are aiming to predict the **Fire Weather Index (FWI)**, which measures the likelihood of a fire occurring, based on various **environmental factors** (independent variables) such as temperature, humidity, wind speed, and other components from the **FWI system** (FFMC, DMC, DC, ISI, BUI).
+
+To begin, we will first build the model on the **raw, unnormalized data**. This step will help us calculate the **coefficients** of the model and understand the relationship between each independent variable and the dependent variable (FWI). Afterward, we will explore how normalizing the data affects the model's performance.
+
+For model evaluation, we will focus on the **p-value** of each coefficient, which indicates the statistical significance of the variables in predicting the **FWI**. A low p-value (typically less than 0.05) suggests that the corresponding independent variable has a significant influence on the dependent variable.
+
+Now, let's proceed to fit the linear regression model on the raw data and examine the coefficients.
+
+# Build Linear Regression Model using raw data
+# We will predict FWI using the environmental factors
+
+# Specify the dependent and independent variables
+dependent_var <- "FWI"  # Dependent variable (Fire Weather Index)
+independent_vars <- c("Temp", "RH", "Ws", "Rain", "FFMC", "DMC", "DC", "ISI", "BUI")
+
+# Formula for the linear regression model
+formula <- as.formula(paste(dependent_var, "~", paste(independent_vars, collapse = "+")))
+
+# Fit the model using the raw data
+linear_model <- lm(formula, data = rawData)
+
+# View the summary of the model to assess the coefficients and p-values
+summary(linear_model)
+
+# Predictions using the trained model on the raw data
+predictions <- predict(linear_model, newdata = rawData)
+
+# Calculate Mean Squared Error (MSE) to evaluate the model's performance
+mse <- mean((predictions - rawData[[dependent_var]])^2)
+cat("Mean Squared Error (MSE):", mse, "\n")
+
+## Model Evaluation
+
+To assess the performance of our linear regression model, we focus on the following key metrics:
+
+- **R-squared (R²)**: This value indicates the proportion of the variance in the Fire Weather Index (FWI) explained by the environmental factors. A higher R² value suggests that the model fits the data well.
+
+- **Adjusted R-squared**: This metric adjusts for the number of predictors in the model, helping us evaluate how well the model generalizes to unseen data. A higher adjusted R² is preferred, as it accounts for model complexity.
+
+- **P-values**: For each predictor, the p-value tells us whether that predictor significantly contributes to the model. A p-value below 0.05 generally indicates that the predictor is statistically significant.
+
+- **Mean Squared Error (MSE)**: MSE measures how accurately the model predicts the FWI on unseen data. Lower MSE values indicate better model performance.
+
+- **Residuals**: Analyzing the residuals helps us identify any patterns that could suggest issues with the model. Ideally, residuals should be randomly distributed without any clear trend.
+
+A good model will have:
+- High R² and adjusted R² values.
+- Low MSE.
+- Statistically significant predictors (p-value < 0.05).
+- Well-behaved residuals.
+
+These metrics together will help us determine how well the model is capable of predicting fire occurrences.
+
+
+
 ## Logistic Regression
 
 
