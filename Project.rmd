@@ -313,65 +313,6 @@ for (col in numerical_columns) {
 
 # Model Development
 
-#Linear Regression 
-
-
-In this section, we will build the **Linear Regression** model to assess how accurately it can perform on unseen data. The model's performance will be evaluated using the **Mean Squared Error (MSE)**, which quantifies the difference between the predicted and actual values of the **Fire Weather Index (FWI)**.
-
-Since linear regression is designed to predict continuous data, we will use numerical data for the analysis. Specifically, we are aiming to predict the **Fire Weather Index (FWI)**, which measures the likelihood of a fire occurring, based on various **environmental factors** (independent variables) such as temperature, humidity, wind speed, and other components from the **FWI system** (FFMC, DMC, DC, ISI, BUI).
-
-To begin, we will first build the model on the **raw, unnormalized data**. This step will help us calculate the **coefficients** of the model and understand the relationship between each independent variable and the dependent variable (FWI). Afterward, we will explore how normalizing the data affects the model's performance.
-
-For model evaluation, we will focus on the **p-value** of each coefficient, which indicates the statistical significance of the variables in predicting the **FWI**. A low p-value (typically less than 0.05) suggests that the corresponding independent variable has a significant influence on the dependent variable.
-
-Now, let's proceed to fit the linear regression model on the raw data and examine the coefficients.
-
-# Build Linear Regression Model using raw data
-# We will predict FWI using the environmental factors
-
-# Specify the dependent and independent variables
-dependent_var <- "FWI"  # Dependent variable (Fire Weather Index)
-independent_vars <- c("Temp", "RH", "Ws", "Rain", "FFMC", "DMC", "DC", "ISI", "BUI")
-
-# Formula for the linear regression model
-formula <- as.formula(paste(dependent_var, "~", paste(independent_vars, collapse = "+")))
-
-# Fit the model using the raw data
-linear_model <- lm(formula, data = rawData)
-
-# View the summary of the model to assess the coefficients and p-values
-summary(linear_model)
-
-# Predictions using the trained model on the raw data
-predictions <- predict(linear_model, newdata = rawData)
-
-# Calculate Mean Squared Error (MSE) to evaluate the model's performance
-mse <- mean((predictions - rawData[[dependent_var]])^2)
-cat("Mean Squared Error (MSE):", mse, "\n")
-
-## Model Evaluation
-
-To assess the performance of our linear regression model, we focus on the following key metrics:
-
-- **R-squared (R²)**: This value indicates the proportion of the variance in the Fire Weather Index (FWI) explained by the environmental factors. A higher R² value suggests that the model fits the data well.
-
-- **Adjusted R-squared**: This metric adjusts for the number of predictors in the model, helping us evaluate how well the model generalizes to unseen data. A higher adjusted R² is preferred, as it accounts for model complexity.
-
-- **P-values**: For each predictor, the p-value tells us whether that predictor significantly contributes to the model. A p-value below 0.05 generally indicates that the predictor is statistically significant.
-
-- **Mean Squared Error (MSE)**: MSE measures how accurately the model predicts the FWI on unseen data. Lower MSE values indicate better model performance.
-
-- **Residuals**: Analyzing the residuals helps us identify any patterns that could suggest issues with the model. Ideally, residuals should be randomly distributed without any clear trend.
-
-A good model will have:
-- High R² and adjusted R² values.
-- Low MSE.
-- Statistically significant predictors (p-value < 0.05).
-- Well-behaved residuals.
-
-These metrics together will help us determine how well the model is capable of predicting fire occurrences.
-
-
 
 ## Logistic Regression
 
@@ -434,77 +375,190 @@ auc(roc_curve)
 
 # ## Support Vector Machine (SVM) Model
 
-In this section, we will build a Support Vector Machine (SVM) model to predict if a fire will occur 
- based on environmental factors (independent variables). SVM works by finding the hyperplane that best  separates the classes in the feature space. We will first train the SVM model using the raw data (without normalization) 
+In this section, we will build a Support Vector Machine (SVM) model to predict if a fire will occur   based on environmental factors (independent variables). SVM works by finding the hyperplane that best  separates the classes in the feature space. We will first train the SVM model using the raw data (without normalization) 
 and evaluate it using the confusion matrix, ROC curve, and AUC. Afterward, we will normalize the data using Z-score normalization 
 to see if it improves the model’s performance.
 
-# ### SVM without Normalization
+# Load necessary libraries
+library(e1071)  # For SVM
+library(caret)  # For data partitioning and evaluation
+library(ggplot2)  # For visualization
+library(patchwork)  # For combining plots
 
-## Loading necessary libraries
-if(!require(e1071)) install.packages("e1071", dependencies=TRUE)  # Install the e1071 package if not already installed
-library(e1071)  # Load the e1071 package, which includes functions for SVM
+# Preprocessing: Create a new data frame for preprocessing to avoid modifying rawData
+rawDataForML <- rawData
 
-## Split the data into training (80%) and testing (20%) sets
-set.seed(123)  # Set seed for reproducibility
-trainIndex <- createDataPartition(rawData$Classes, p = 0.8, list = FALSE)  # 80% training data
-trainData <- rawData[trainIndex, ]  # Extract training dataset
-testData <- rawData[-trainIndex, ]  # Extract testing dataset
+# Step 1: Drop the 'Year' column (assuming it's not needed)
+rawDataForML$Year <- NULL
 
-## Train the SVM model using the 'Classes' as the dependent variable
-svm_model <- svm(Classes ~ Temp + RH + Ws + Rain + FFMC + DMC + DC + ISI + BUI + FWI,
-                 data = trainData,  # Use training data
-                 kernel = "linear",  # Use linear kernel
-                 type = "C-classification")  # Classification problem
+# Step 2: Encode 'Class' and 'City'
+# Encode 'Class' as -1 for 'F' and 1 for 'NF'
+rawDataForML$Class <- ifelse(rawDataForML$Class == "F", -1, 1)
 
-## Make predictions using the test data
-svm_predictions <- predict(svm_model, newdata = testData)
+# Encode 'City' as -1 for 'Cordillera' and 1 for 'Hudson Bay'
+rawDataForML$City <- ifelse(rawDataForML$City == "Cordillera", -1, 1)
 
-## Evaluate the performance using a confusion matrix
-confusionMatrix(svm_predictions, testData$Classes)
+# Function to run SVM with different kernels and cost values
+run_svm <- function(data, exclude_cols, kernel = "linear", cost = 1, gamma = NULL, degree = 3, scale = TRUE) {
+  set.seed(6122024)  # Set seed for reproducibility
+  
+  # Exclude specified columns
+  data <- data[, !names(data) %in% exclude_cols]
+  
+  # Ensure Class is a factor
+  data$Class <- as.factor(data$Class)
+  
+ 
+  # Split data into training and test sets (75:25 split)
+  train_index <- createDataPartition(data$Class, p = 0.75, list = FALSE)
+  train_data <- data[train_index, ]
+  test_data <- data[-train_index, ]
+  
+  # Train the SVM model
+  svm_model <- svm(
+    Class ~ ., 
+    data = train_data, 
+    kernel = kernel, 
+    cost = cost, 
+    gamma = gamma, 
+    degree = degree, 
+    scale = scale
+  )
+  
+  # Make predictions on the test set
+  test_predictions <- predict(svm_model, newdata = test_data)
+  
+  # Evaluate performance
+  conf_matrix <- confusionMatrix(test_predictions, test_data$Class)
+  
+  # Extract confusion matrix as a dataframe
+  conf_matrix_table <- as.data.frame(conf_matrix$table)
+  names(conf_matrix_table) <- c("Reference", "Prediction", "Freq")
+  
+  # Plot confusion matrix
+  conf_matrix_plot <- ggplot(conf_matrix_table, aes(x = Reference, y = Prediction, fill = Freq)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = Freq), vjust = 1) +
+    scale_fill_gradient(low = "white", high = "blue") +
+    theme_minimal() +
+    labs(title = paste("Confusion Matrix (Kernel:", kernel, ")"), x = "Actual", y = "Predicted")
+  
+  # Calculate metrics
+  accuracy <- sum(diag(conf_matrix$table)) / sum(conf_matrix$table)
+  precision <- conf_matrix$byClass["Pos Pred Value"]
+  recall <- conf_matrix$byClass["Sensitivity"]
+  f1_score <- 2 * (precision * recall) / (precision + recall)
+  
+  # Create a dataframe for descriptive statistics
+  metrics_df <- data.frame(
+    Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+    Value = c(accuracy, precision, recall, f1_score)
+  )
+  
+  # Plot descriptive statistics
+  metrics_plot <- ggplot(metrics_df, aes(x = Metric, y = Value, fill = Metric)) +
+    geom_bar(stat = "identity", show.legend = FALSE) +
+    geom_text(aes(label = round(Value, 2)), vjust = -0.5) +
+    theme_minimal() +
+    labs(title = "Performance Metrics", y = "Value", x = "") +
+    ylim(0, 1)
+  
+  # Combine the plots and display
+  combined_plot <- conf_matrix_plot + metrics_plot
+  print(combined_plot)
+  
+  # Return performance metrics for reporting
+  return(list(
+    Accuracy = accuracy,
+    Precision = precision,
+    Recall = recall,
+    F1_Score = f1_score,
+    Confusion_Matrix = conf_matrix,
+    Model = svm_model  # Return the model for further use
+  ))
+}
 
-## Generate the ROC curve and calculate the AUC (Area Under the Curve)
-svm_roc <- roc(testData$Classes, as.numeric(svm_predictions), levels=rev(levels(testData$Classes)))
-plot(svm_roc, main = "ROC Curve for SVM", col = "blue", lwd = 2)
-auc(svm_roc)  # Display the AUC score
 
-# The SVM model without normalization is now trained and evaluated.
+# Testing different kernels with default cost=1, gamma=0.1, degree=3
+results_poly <- run_svm(rawDataForML, exclude_cols = c("Day", "Month", "Year"), kernel = "polynomial", cost = 1, gamma = 0.1, degree = 3)
+results_rbf <- run_svm(rawDataForML, exclude_cols = c("Day", "Month", "Year"), kernel = "radial", cost = 1, gamma = 0.1)
+results_sigmoid <- run_svm(rawDataForML, exclude_cols = c("Day", "Month", "Year"), kernel = "sigmoid", cost = 1, gamma = 0.1)
 
-# ### SVM with Normalization (Z-score)
+# Now, let's test with different cost values to observe the impact on support vectors and performance
 
-# Normalization is important for models like SVM as it ensures all features are on the same scale.
-# We'll use Z-score normalization to standardize the data before training the SVM model.
+# Test with higher cost values
+results_poly1 <- run_svm(rawDataForML, exclude_cols = c("Day", "Month", "Year"), kernel = "polynomial", cost = 10, gamma = 0.1, degree = 3)
+results_rbf1 <- run_svm(rawDataForML, exclude_cols = c("Day", "Month", "Year"), kernel = "radial", cost = 0.01, gamma = 0.1)
+results_sigmoid1 <- run_svm(rawDataForML, exclude_cols = c("Day", "Month", "Year"), kernel = "sigmoid", cost = 100, gamma = 0.1)
 
-## Apply Z-score normalization to the numerical columns
-numerical_columns <- c("Temp", "RH", "Ws", "Rain", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI")
+# Observations and explanations:
+# - As cost increases, we expect the model to prioritize reducing misclassifications, which may lead to more support vectors.
+# - When cost is smaller, the margin becomes wider, and there may be fewer support vectors, allowing for more misclassification.
+# The choice of kernel will impact how well the model can fit the data, and different kernels may have varying performance across the different datasets.
 
-# Normalize the numerical columns using Z-score
-rawData_normalized <- rawData
-rawData_normalized[numerical_columns] <- scale(rawData[numerical_columns])
+# Print results for different kernels
+print(results_poly)
+print(results_rbf)
+print(results_sigmoid)
 
-## Split the normalized data into training and testing sets
-trainData_normalized <- rawData_normalized[trainIndex, ]
-testData_normalized <- rawData_normalized[-trainIndex, ]
+# Print results with different cost values
+print(results_poly1)
+print(results_rbf1)
+print(results_sigmoid1)
+```
+Analsyis of the output:
 
-## Train the SVM model using normalized data
-svm_model_normalized <- svm(Classes ~ Temp + RH + Ws + Rain + FFMC + DMC + DC + ISI + BUI + FWI,
-                            data = trainData_normalized,  # Use normalized training data
-                            kernel = "linear",  # Use linear kernel
-                            type = "C-classification")  # Classification problem
+The SVM model's performance varied based on the kernel and cost value. The RBF kernel with cost 1 yielded the highest accuracy (98.33%) and fewer support vectors (74). The polynomial and sigmoid kernels performed similarly with an accuracy of 96.67%, though the sigmoid kernel had fewer support vectors (56). When cost increased (e.g., cost = 10), accuracy dropped slightly, especially with the polynomial kernel (95%) and the RBF kernel with low cost (0.01) resulted in overfitting (56.67%). Overall, the RBF kernel with cost 1 proved to be the most effective configuration.
 
-## Make predictions using the normalized test data
-svm_predictions_normalized <- predict(svm_model_normalized, newdata = testData_normalized)
+Cost and Support Vectors: As the cost increases (e.g., from 1 to 10), the number of support vectors generally decreases. A higher cost places more emphasis on correctly classifying the training data, leading to fewer support vectors and a more complex model.
+Model Performance: The RBF kernel generally gives the best performance in terms of accuracy, while the polynomial kernel performs similarly to the sigmoid kernel but with a slightly larger number of support vectors.
+Impact of Low Cost: With lower cost (e.g., cost = 0.01), the model becomes more tolerant of misclassification, leading to wider margins but more errors in prediction, as seen with the RBF kernel's significant drop in accuracy.
+These results indicate the sensitivity of the SVM to cost and kernel choice, highlighting the importance of tuning these parameters for optimal performance.
 
-## Evaluate the performance using a confusion matrix for normalized data
-confusionMatrix(svm_predictions_normalized, testData_normalized$Classes)
+#Now we test the SVM on normalized data , using the Min-Max normilazation
 
-## Generate the ROC curve and calculate the AUC (Area Under the Curve) for normalized data
-svm_roc_normalized <- roc(testData_normalized$Classes, as.numeric(svm_predictions_normalized), levels=rev(levels(testData_normalized$Classes)))
-plot(svm_roc_normalized, main = "ROC Curve for Normalized SVM", col = "red", lwd = 2)
-auc(svm_roc_normalized)  # Display the AUC score
+```{r}
+preProc <- preProcess(rawDataForML[, !names(rawDataForML) %in% c("Class", "City")], method = "range")
+normalized_data <- predict(preProc, rawDataForML)
 
-# The SVM model with normalization is now trained and evaluated.
+# Testing different kernels with normalized data and default cost=1, gamma=0.1, degree=3
+results_poly <- run_svm(normalized_data, exclude_cols = c("Day", "Month", "Year"), kernel = "polynomial", cost = 1, gamma = 0.1, degree = 3)
+results_rbf <- run_svm(normalized_data, exclude_cols = c("Day", "Month", "Year"), kernel = "radial", cost = 1, gamma = 0.1)
+results_sigmoid <- run_svm(normalized_data, exclude_cols = c("Day", "Month", "Year"), kernel = "sigmoid", cost = 1, gamma = 0.1)
 
+# Now, let's test with different cost values to observe the impact on support vectors and performance
+
+# Test with higher cost values
+results_poly1 <- run_svm(normalized_data, exclude_cols = c("Day", "Month", "Year"), kernel = "polynomial", cost = 10, gamma = 0.1, degree = 3)
+results_rbf1 <- run_svm(normalized_data, exclude_cols = c("Day", "Month", "Year"), kernel = "radial", cost = 0.01, gamma = 0.1)
+results_sigmoid1 <- run_svm(normalized_data, exclude_cols = c("Day", "Month", "Year"), kernel = "sigmoid", cost = 100, gamma = 0.1)
+
+# Observations and explanations:
+# - As cost increases, we expect the model to prioritize reducing misclassifications, which may lead to more support vectors.
+# - When cost is smaller, the margin becomes wider, and there may be fewer support vectors, allowing for more misclassification.
+# The choice of kernel will impact how well the model can fit the data, and different kernels may have varying performance across the different datasets.
+
+# Print results for different kernels
+print(results_poly)
+print(results_rbf)
+print(results_sigmoid)
+
+# Print results with different cost values
+print(results_poly1)
+print(results_rbf1)
+print(results_sigmoid1)
+```
+The analysis of SVM performance with normalized (testing with the same changes of cost and kernel) data tells us the following:
+
+The RBF kernel with a cost of 1 gives the best results, achieving 98.33% accuracy, with high precision (1.0) and sensitivity (0.9706). The number of support vectors is 74.
+The polynomial kernel with cost 1 shows good performance with 96.67% accuracy, 1.0 sensitivity, and 0.944 precision. It uses 90 support vectors.
+The sigmoid kernel also performs well with 96.67% accuracy, 1.0 specificity, and 0.9412 recall, but with fewer support vectors (56).
+With higher cost values:
+
+The polynomial kernel with cost 10 sees a slight drop in accuracy (95%) but still maintains solid performance.
+The RBF kernel with cost 0.01 drops drastically to 56.67% accuracy, overfitting the data with excessive support vectors (161).
+The sigmoid kernel with cost 100 gives 91.67% accuracy, showing a balanced performance with a decent precision of 0.9394.
+In conclusion, the RBF kernel is the most effective for this dataset, while cost adjustments impact the model’s ability to generalize.
 
 ## Analysis
 
